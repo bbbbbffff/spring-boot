@@ -253,6 +253,33 @@ public class SpringApplication {
 	 * @see #SpringApplication(ResourceLoader, Class...)
 	 * @see #setSources(Set)
 	 */
+	/**
+	 * notes:
+	 * 传入的 primarySources 实际上是每个模块（或子工程）中的启动类，通常标注了 @SpringBootApplication。
+	 *
+	 * 在多模块项目中，可能存在多个启动类：
+	 *   - 若模块需独立运行，或运行环境差异较大，可为每个模块定义各自的启动类；
+	 *   - 若模块间强依赖，环境一致，通常只需一个统一的启动类。
+	 *
+	 * Spring Boot 会从启动类出发，读取如 @SpringBootApplication、@ComponentScan 等注解，
+	 * 以确定 Bean 扫描路径、配置源和自动装配逻辑。
+	 *
+	 * 常见场景：只有 web 模块包含启动类，service 模块没有；
+	 *   - web 模块依赖 service 模块（通过 pom.xml）；
+	 *   - 启动类配置的扫描路径通常在两个模块的共同父包上；
+	 *   - 构建后 classpath 中已包含 service 模块的类；
+	 *   → 因此 Spring Boot 依然可以扫描并注入 service 模块中的 Bean。
+	 *
+	 * 附：SpringApplication 支持启动前定制：
+	 *   SpringApplication app = new SpringApplication(MyApp.class);
+	 *   app.setBannerMode(Banner.Mode.OFF);       // 关闭 Banner
+	 *   app.setWebApplicationType(WebApplicationType.NONE); // 设置非 Web 应用
+	 *   app.addListeners(...);                    // 添加监听器
+	 *   app.run(args);                            // 启动应用
+	 *
+	 * 这与常见写法等价于：
+	 *   SpringApplication.run(MyApp.class, args);
+	 */
 	public SpringApplication(Class<?>... primarySources) {
 		this(null, primarySources);
 	}
@@ -272,10 +299,28 @@ public class SpringApplication {
 		this.resourceLoader = resourceLoader;
 		Assert.notNull(primarySources, "'primarySources' must not be null");
 		this.primarySources = new LinkedHashSet<>(Arrays.asList(primarySources));
+		//判断应用类型，是servlet、reactive还是none，判断的依据就是看项目工程里有没有引入某个包
 		this.properties.setWebApplicationType(WebApplicationType.deduceFromClasspath());
+		//读取实现了BootstrapRegistryInitializer接口的实现类，用一个list存起来，等待后续的使用
 		this.bootstrapRegistryInitializers = new ArrayList<>(
 				getSpringFactoriesInstances(BootstrapRegistryInitializer.class));
+		//加载所有实现了 ApplicationContextInitializer 接口的类；
+		//并通过 setInitializers() 方法注册到当前 SpringApplication 实例中；
+		//这些初始化器会在 Spring 容器刷新（refresh()）之前被调用，用来对 ConfigurableApplicationContext 做额外的初始化操作。
+		//常见用途：
+		//在上下文创建之前，动态设置环境参数、注册额外的 Bean、修改属性源等；
+		//比如你可以自定义一个初始化器修改配置源：
 		setInitializers((Collection) getSpringFactoriesInstances(ApplicationContextInitializer.class));
+		//加载所有实现了 ApplicationListener 接口的类；
+		//并通过 setListeners() 方法注册到 SpringApplication 中；
+		//这些监听器会监听 Spring 启动过程中的各种事件（如启动开始、环境准备好、容器创建完成、失败等）。
+		//常见用途：
+		//监听 ApplicationStartedEvent、ApplicationReadyEvent、ApplicationFailedEvent 等；
+		//做日志初始化、安全审计、监控指标上报等。
+		//将所有符合条件的 ApplicationListener 类型的监听器实例加载到 Spring 的应用上下文中，确保它们能够响应应用的生命周期事件。
+		//通过调用 getSpringFactoriesInstances(ApplicationListener.class)，
+		// Spring 会扫描并加载所有在 spring.factories 文件中定义的事件监听器。
+		// 这意味着你可以通过这种方式在应用启动过程中自动注册一组事件监听器。
 		setListeners((Collection) getSpringFactoriesInstances(ApplicationListener.class));
 		this.mainApplicationClass = deduceMainApplicationClass();
 	}
