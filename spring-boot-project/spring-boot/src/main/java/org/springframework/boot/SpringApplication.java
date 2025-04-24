@@ -294,7 +294,6 @@ public class SpringApplication {
 	 * @see #run(Class, String[])
 	 * @see #setSources(Set)
 	 */
-	@SuppressWarnings({ "unchecked", "rawtypes" })
 	public SpringApplication(ResourceLoader resourceLoader, Class<?>... primarySources) {
 		this.resourceLoader = resourceLoader;
 		Assert.notNull(primarySources, "'primarySources' must not be null");
@@ -302,8 +301,7 @@ public class SpringApplication {
 		//判断应用类型，是servlet、reactive还是none，判断的依据就是看项目工程里有没有引入某个包
 		this.properties.setWebApplicationType(WebApplicationType.deduceFromClasspath());
 		//读取实现了BootstrapRegistryInitializer接口的实现类，用一个list存起来，等待后续的使用
-		this.bootstrapRegistryInitializers = new ArrayList<>(
-				getSpringFactoriesInstances(BootstrapRegistryInitializer.class));
+		this.bootstrapRegistryInitializers = new ArrayList<>(				getSpringFactoriesInstances(BootstrapRegistryInitializer.class));
 		//加载所有实现了 ApplicationContextInitializer 接口的类；
 		//并通过 setInitializers() 方法注册到当前 SpringApplication 实例中；
 		//这些初始化器会在 Spring 容器刷新（refresh()）之前被调用，用来对 ConfigurableApplicationContext 做额外的初始化操作。
@@ -345,28 +343,43 @@ public class SpringApplication {
 	 */
 	public ConfigurableApplicationContext run(String... args) {
 		Startup startup = Startup.create();
+		//是否注册了钩子，如果注册了JVM钩子，会有优雅关闭效果
 		if (this.properties.isRegisterShutdownHook()) {
 			SpringApplication.shutdownHook.enableShutdownHookAddition();
 		}
+		//创建一个引导上下文 bootstrapContext，它保存一些启动期间需要的对象和配置。BootstrapContext 是 Spring Boot 启动过程中的核心，类似于一个初始的环境配置容器
 		DefaultBootstrapContext bootstrapContext = createBootstrapContext();
 		ConfigurableApplicationContext context = null;
+		//配置了 Spring 应用的 headless 属性。headless 属性指示应用是否是图形界面应用。这个属性默认是 false，通常只会在没有显示界面的环境下（例如在服务器上）设置为 true
 		configureHeadlessProperty();
+		//通过 getRunListeners() 获取启动监听器，并广播 ApplicationStartingEvent 事件，通知所有监听器应用开始启动
 		SpringApplicationRunListeners listeners = getRunListeners(args);
 		listeners.starting(bootstrapContext, this.mainApplicationClass);
 		try {
 			ApplicationArguments applicationArguments = new DefaultApplicationArguments(args);
+			//prepareEnvironment 方法准备 ConfigurableEnvironment，它包含了应用的环境配置、属性源、命令行参数等信息。environment 会在后续步骤中传递给 Spring 容器。
 			ConfigurableEnvironment environment = prepareEnvironment(listeners, bootstrapContext, applicationArguments);
+			//打印 Banner
 			Banner printedBanner = printBanner(environment);
+			//创建合适类型的 ConfigurableApplicationContext（根据 Web 应用或普通应用），并设置启动监控（applicationStartup）
 			context = createApplicationContext();
 			context.setApplicationStartup(this.applicationStartup);
+			//对上下文进行准备，注册一些额外的配置和初始化操作，比如注册 ApplicationContextInitializer 和监听器等v
 			prepareContext(bootstrapContext, context, environment, listeners, applicationArguments, printedBanner);
+			//这一步刷新 Spring 应用上下文。容器的真正初始化和 Bean 的创建、依赖注入都发生在这一步
+			//这是 Spring 容器生命周期的关键步骤，刷新容器后，容器中会有 Bean 实例，并且应用上下文准备就绪。
 			refreshContext(context);
+			//执行一些在容器刷新后需要完成的操作。比如初始化一些特定的组件或服务。
 			afterRefresh(context, applicationArguments);
+			//在启动过程中记录启动时间等信息。
+			//如果配置了日志信息，会记录应用启动的详细信息。
 			startup.started();
 			if (this.properties.isLogStartupInfo()) {
 				new StartupInfoLogger(this.mainApplicationClass, environment).logStarted(getApplicationLog(), startup);
 			}
+			//通知监听器应用已经启动，应用上下文准备就绪，所有的启动事件都已完成。
 			listeners.started(context, startup.timeTakenToStarted());
+			//如果应用中有实现 CommandLineRunner 或 ApplicationRunner 的 Bean，会在这一步被调用。它们是启动时可以执行的操作，常用于初始化缓存、数据库连接等操作。
 			callRunners(context, applicationArguments);
 		}
 		catch (Throwable ex) {
@@ -374,12 +387,14 @@ public class SpringApplication {
 		}
 		try {
 			if (context.isRunning()) {
+				//启动完成后，通知所有监听器应用已准备好。这意味着 Spring 容器已完全初始化，可以开始处理业务请求了。
 				listeners.ready(context, startup.ready());
 			}
 		}
 		catch (Throwable ex) {
 			throw handleRunFailure(context, ex, null);
 		}
+		//最后，返回创建好的 ConfigurableApplicationContext 实例，表示 Spring Boot 应用已经启动并准备就绪。
 		return context;
 	}
 
