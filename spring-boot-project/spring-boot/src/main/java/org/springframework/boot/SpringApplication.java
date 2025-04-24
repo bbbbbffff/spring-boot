@@ -300,8 +300,11 @@ public class SpringApplication {
 		this.primarySources = new LinkedHashSet<>(Arrays.asList(primarySources));
 		//判断应用类型，是servlet、reactive还是none，判断的依据就是看项目工程里有没有引入某个包
 		this.properties.setWebApplicationType(WebApplicationType.deduceFromClasspath());
-		//读取实现了BootstrapRegistryInitializer接口的实现类，用一个list存起来，等待后续的使用
-		this.bootstrapRegistryInitializers = new ArrayList<>(				getSpringFactoriesInstances(BootstrapRegistryInitializer.class));
+		//通过META-INF/spring.factories读取实现了BootstrapRegistryInitializer接口的实现类，用一个list存起来，等待后续的使用
+		//只是列出了需要的菜品（即类的类型），但是这些菜品还没有真正买回来（即实例化）一样。这个步骤只是在准备好 需要的类，但并没有实际创建这些类的实例。
+		// Spring 只是收集了这些类的定义（通过反射等方式），然后在启动过程中，或者在需要的时候才会真正实例化它们。
+		//换句话说，这些类在 bootstrapRegistryInitializers 中的状态类似于 “菜谱” 或者 “菜单”，而实际的菜品（即实例）只有在后续的步骤中才会被 “烹饪”（实例化并执行）。
+		this.bootstrapRegistryInitializers = new ArrayList<>(getSpringFactoriesInstances(BootstrapRegistryInitializer.class));
 		//加载所有实现了 ApplicationContextInitializer 接口的类；
 		//并通过 setInitializers() 方法注册到当前 SpringApplication 实例中；
 		//这些初始化器会在 Spring 容器刷新（refresh()）之前被调用，用来对 ConfigurableApplicationContext 做额外的初始化操作。
